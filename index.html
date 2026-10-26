@@ -96,6 +96,8 @@ const $ = id => document.getElementById(id);
 let W, H, DPR;
 const WORLD = { w: 2600, h: 2600 };
 const BASE = 6;
+const MAX_BODY = 55;   // longest the snake's body can get on screen
+const MAX_THICK = 80;  // size where the snake stops getting fatter
 const AI_COUNT = 7, EGG_COUNT = 90;
 
 const PALETTE = [
@@ -157,10 +159,11 @@ class Snake {
     this.look = look; this.player = isPlayer;
     this.size = size; this.angle = rand(0, Math.PI*2); this.want = this.angle;
     this.segs = [];
-    for (let i = 0; i < size; i++) this.segs.push({ x: x - Math.cos(this.angle)*i*6, y: y - Math.sin(this.angle)*i*6 });
+    for (let i = 0; i < Math.min(size, MAX_BODY); i++) this.segs.push({ x: x - Math.cos(this.angle)*i*6, y: y - Math.sin(this.angle)*i*6 });
     this.hurt = 0; this.stun = 0; this.tt = 0; this.target = null; this.wander = this.angle;
   }
-  get r(){ return 9 + Math.sqrt(this.size) * 1.6; }
+  get r(){ return 9 + Math.sqrt(Math.min(this.size, MAX_THICK)) * 1.6; }
+  get bodyLen(){ return Math.min(this.size, MAX_BODY); }
   get speed(){ return Math.min(110 + Math.sqrt(this.size) * 14, 260) * (this.player ? 1 : 0.72); }
   get head(){ return this.segs[0]; }
   update(dt){
@@ -174,8 +177,8 @@ class Snake {
     h.x = clamp(h.x, m, WORLD.w - m); h.y = clamp(h.y, m, WORLD.h - m);
     // grow/shrink a segment at a time so changes are visible
     for (let k = 0; k < 2; k++){
-      if (this.segs.length < this.size){ const t = this.segs[this.segs.length-1]; this.segs.push({ x:t.x, y:t.y }); }
-      else if (this.segs.length > this.size && this.segs.length > 2) this.segs.pop();
+      if (this.segs.length < this.bodyLen){ const t = this.segs[this.segs.length-1]; this.segs.push({ x:t.x, y:t.y }); }
+      else if (this.segs.length > this.bodyLen && this.segs.length > 2) this.segs.pop();
     }
     const gap = r * 0.55;
     for (let i = 1; i < this.segs.length; i++){
