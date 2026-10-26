@@ -1,6 +1,6 @@
 // Saves the game on the device so it runs with no internet.
 // Change VERSION whenever you upload a new index.html.
-const VERSION = 'wiggle-v2';
+const VERSION = 'wiggle-v3';
 const FILES = ['./', './index.html', './manifest.json', './icon.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));

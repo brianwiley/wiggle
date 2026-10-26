@@ -132,7 +132,31 @@ const rand = (a,b) => a + Math.random()*(b-a);
 const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
 
 /* ---------- sound ---------- */
-let AC = null, muted = false;
+let AC = null, muted = false, silentLoop = null;
+// Make game sound play even when the phone's Ring/Silent switch is on silent.
+// The in-game Sound on/off button is the only mute.
+function silentWavURL(){
+  const n = 4410, buf = new ArrayBuffer(44 + n*2), v = new DataView(buf);
+  const w = (o, str) => { for (let i = 0; i < str.length; i++) v.setUint8(o+i, str.charCodeAt(i)); };
+  w(0,'RIFF'); v.setUint32(4, 36 + n*2, true); w(8,'WAVE'); w(12,'fmt ');
+  v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+  v.setUint32(24,44100,true); v.setUint32(28,88200,true); v.setUint16(32,2,true); v.setUint16(34,16,true);
+  w(36,'data'); v.setUint32(40, n*2, true);
+  return URL.createObjectURL(new Blob([buf], { type:'audio/wav' }));
+}
+function ensureAudio(){
+  try {
+    if (navigator.audioSession) navigator.audioSession.type = 'playback';
+    else if (!silentLoop){
+      // Older iOS: a silent looping audio element moves the page into "media playback" mode
+      silentLoop = new Audio(silentWavURL());
+      silentLoop.loop = true; silentLoop.setAttribute('playsinline', '');
+    }
+    if (silentLoop && silentLoop.paused) silentLoop.play().catch(() => {});
+    if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state !== 'running') AC.resume().catch(() => {});
+  } catch(e){}
+}
 function tone(f1, f2, dur, type='sine', vol=.15, delay=0){
   if (!AC || muted) return;
   const t = AC.currentTime + delay;
@@ -248,7 +272,7 @@ function baseZoom(){
 
 /* ---------- input ---------- */
 const pointer = { down:false, sx:0, sy:0 };
-cv.addEventListener('pointerdown', e => { pointer.down = true; pointer.sx = e.clientX; pointer.sy = e.clientY; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointerdown', e => { if (running && !muted) ensureAudio(); pointer.down = true; pointer.sx = e.clientX; pointer.sy = e.clientY; cv.setPointerCapture(e.pointerId); });
 cv.addEventListener('pointermove', e => { if (pointer.down || e.pointerType === 'mouse'){ pointer.sx = e.clientX; pointer.sy = e.clientY; if (e.pointerType==='mouse') pointer.down = true; } });
 cv.addEventListener('pointerup', e => { if (e.pointerType !== 'mouse') pointer.down = false; });
 cv.addEventListener('pointercancel', () => pointer.down = false);
@@ -439,15 +463,19 @@ function togglePause(){
 }
 
 $('playBtn').addEventListener('click', () => {
-  if (!AC){ try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){} }
-  if (AC && AC.state === 'suspended') AC.resume();
+  ensureAudio();
   start();
 });
-$('resumeBtn').addEventListener('click', start);
+$('resumeBtn').addEventListener('click', () => { ensureAudio(); start(); });
 $('pauseBtn').addEventListener('click', pause);
-$('restartBtn').addEventListener('click', () => { newGame(); start(); });
-$('muteBtn').addEventListener('click', () => { muted = !muted; $('muteBtn').textContent = muted ? 'Sound off' : 'Sound on'; });
-document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+$('restartBtn').addEventListener('click', () => { ensureAudio(); newGame(); start(); });
+$('muteBtn').addEventListener('click', () => {
+  muted = !muted;
+  $('muteBtn').textContent = muted ? 'Sound off' : 'Sound on';
+  if (muted){ if (silentLoop) silentLoop.pause(); }
+  else { ensureAudio(); tone(520, 1040, .1, 'sine', .14); }
+});
+document.addEventListener('visibilitychange', () => { if (document.hidden){ pause(); if (silentLoop) silentLoop.pause(); } });
 
 newGame();
 draw(0);
